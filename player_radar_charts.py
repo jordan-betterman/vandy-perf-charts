@@ -5,7 +5,11 @@ import boto3
 import yaml
 
 # Set layout and background
-st.set_page_config(layout="wide", page_icon="vanderbilt_logo.svg")
+st.set_page_config(
+    layout="wide", 
+    page_icon="vanderbilt_logo.svg",
+    page_title="Vanderbilt Analytics"
+)
 st.sidebar.image("vanderbilt_logo.svg", width=75)
 
 AWS_ACCESS_KEY_ID = st.secrets["AWS_ACCESS_KEY_ID"]
