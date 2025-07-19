@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#B3A369"  # Example: Vanderbilt gold
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#000000"
+font = "sans serif"
