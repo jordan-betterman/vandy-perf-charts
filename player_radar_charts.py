@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import boto3
 import yaml
+from sklearn.preprocessing import MinMaxScaler
 
 # Set layout and background
 st.set_page_config(
@@ -36,11 +37,41 @@ def load_config():
 data = load_data_from_s3()
 config = load_config()
 
+def calculate_percentile(data):
+    data = (
+        data.groupby(["team", "player_name"])
+        .mean()
+        .reset_index()
+    )
+    return (
+        data[["team", "player_name"]]
+        .join(
+            data.drop(columns=["team", "player_name"]).rank(pct=True).round(2) * 100
+        )
+    )
+
+def calculate_mean(data):
+    data = (
+        data.groupby(["team", "player_name"])
+        .mean()
+        .round(2)
+        .reset_index()
+    )
+    return data
+
 st.sidebar.header("Filters")
 season_select = st.sidebar.selectbox(
     options=data["year"].unique(),
     label="Select Season",
 )
+
+st.sidebar.subheader("Select Metrics")
+metric_options = ["Average (per game)", "Percentile"]
+selected_metric = st.sidebar.selectbox(
+    "Select Metric",
+    options=metric_options,
+)
+
 
 data = data[data["year"] == season_select]
 data = data[data["player_name"] != "undefined"]
@@ -49,19 +80,6 @@ for new_col, (numerator, denominator) in config["metrics"].items():
     data[new_col] = data[numerator] / data[denominator]
 
 data = data.fillna(0)
-
-def calculate_percentile(data):
-    data = (
-        data.groupby(["team", "player_name", "year"])
-        .mean()
-        .reset_index()
-    )
-    return (
-        data[["team", "player_name", "year"]]
-        .join(
-            data.drop(columns=["team", "player_name", "year"]).rank(pct=True).round(2) * 100
-        )
-    )
 
 postional_subsets = {
     "Wingers": data[data["Position"].str.contains("LW") | data["Position"].str.contains("RW")],
@@ -81,49 +99,94 @@ def plot_radar(players, position, position_df, season=2024):
 
     data = data.drop(columns=["year"])
 
-    data = (
-        data.groupby(["team", "player_name"])[columns]
-        .mean()
-        .reset_index()
-    )
-
-    
-    data = data[["team", "player_name"]].join(
-            data.drop(columns=["team", "player_name"]).rank(pct=True).round(2) * 100
-        )
-
-    # Only compute mean on the selected columns
-    conference_avg = data[columns].mean().round(2)
-
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatterpolar(
-            r=conference_avg.values,
-            theta=labels,
-            fill='toself',
-            name='Big Ten Avg',
-            line_color='rgba(179, 163, 105, 0.5)',
-            fillcolor="rgba(179, 163, 105, 0.5)"
+
+    if selected_metric == "Average (per game)":
+        data = calculate_mean(data[columns + ["team", "player_name"]])
+
+        scaler = MinMaxScaler((0, 100))
+        std_data = scaler.fit_transform(data[columns])
+        std_data = pd.DataFrame(std_data, columns=columns)
+        std_data["team"] = data["team"]
+        std_data["player_name"] = data["player_name"]
+        conference_avg = std_data[columns].mean().round(2)
+
+        hovertext = [
+            f"{label}: {val:.2f}"
+            for label, val in zip(labels, data[columns].mean().round(2).values.flatten())
+        ]
+
+        fig.add_trace(
+            go.Scatterpolar(
+                r=conference_avg.values.flatten(),
+                theta=labels,
+                fill='toself',
+                name='SEC Avg',
+                line_color='rgba(179, 163, 105, 0.5)',
+                fillcolor="rgba(179, 163, 105, 0.5)",
+                hovertext=hovertext,
+                hoverinfo='text'
+            )
         )
-    )
+
+
+    elif selected_metric == "Percentile":
+        data = calculate_percentile(data[columns + ["team", "player_name"]])
+        conference_avg = data[columns].mean().round(2)
+    
+        fig.add_trace(
+                go.Scatterpolar(
+                    r=conference_avg.values.flatten(),
+                    theta=labels,
+                    fill='toself',
+                    name='SEC Avg',
+                    line_color='rgba(179, 163, 105, 0.5)',
+                    fillcolor="rgba(179, 163, 105, 0.5)",
+                )
+            )
 
     if players:
         for player in players:
-            row = data[data["player_name"] == player]
-            if not row.empty:
-                fig.add_trace(go.Scatterpolar(
-                    r=row[columns].values.flatten(),
-                    theta=labels,
-                    fill='toself',
-                    name=player
-                ))
+            if selected_metric == "Average (per game)":
+                row = std_data[std_data["player_name"] == player]
+                if not row.empty:
+                    raw_row = data[data["player_name"] == player]
+                    raw_values = raw_row[columns].values.flatten() if not raw_row.empty else row[columns].values.flatten()
+
+                    hovertext = [
+                        f"{label}: {raw_val:.2f}"
+                        for label, raw_val in zip(labels, raw_values)
+                    ]
+
+                    fig.add_trace(go.Scatterpolar(
+                        r=row[columns].values.flatten(),
+                        theta=labels,
+                        fill='toself',
+                        name=player,
+                        hovertext=hovertext,
+                        hoverinfo='text',
+                    ))
+            elif selected_metric == "Percentile":
+                row = data[data["player_name"] == player]
+                if not row.empty:
+                    fig.add_trace(go.Scatterpolar(
+                        r=row[columns].values.flatten(),
+                        theta=labels,
+                        fill='toself',
+                        name=player
+                    ))
+
+    if selected_metric == "Percentile":
+        visible = True
+    else:
+        visible = False
 
     fig.update_layout(
     polar=dict(
         angularaxis=dict(
             showticklabels=True,
         ),
-        radialaxis=dict(visible=True, range=[0, 100])
+        radialaxis=dict(visible=True, showticklabels=False, range=[0, 100])
     ),
     margin=dict(t=80, b=80, l=100, r=100),  # add more space around
 )
@@ -132,9 +195,7 @@ def plot_radar(players, position, position_df, season=2024):
 
 # App layout
 st.title("Vanderbilt Player Performance Charts")
-st.header("For evaluating player performance in the SEC using percentile KPI metrics")
-
-
+st.header("For evaluating player performance in the SEC using KPI metrics")
 
 col1, col2 = st.columns(2)
 
