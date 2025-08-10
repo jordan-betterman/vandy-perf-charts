@@ -18,7 +18,7 @@ AWS_SECRET_ACCESS_KEY = st.secrets["AWS_SECRET_ACCESS_KEY"]
 BUCKET_NAME = st.secrets["BUCKET_NAME"]
 CSV_KEY = st.secrets["CSV_KEY"]
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_data_from_s3():
     s3 = boto3.client(
         "s3",
