@@ -189,7 +189,6 @@ def plot_radar(players, position, position_df, season=2024):
                         fill='toself',
                         name=player
                     ))
-        data
 
     fig.update_layout(
     polar=dict(
