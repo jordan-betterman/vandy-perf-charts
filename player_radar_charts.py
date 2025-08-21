@@ -85,8 +85,8 @@ postional_subsets = {
     "Wingers": data[data["Position"].str.contains("LW") | data["Position"].str.contains("RW")],
     "Goalkeepers": data[data["Position"].str.contains("GK")],
     "Forwards": data[data["Position"].str.contains("CF")],
-    "Central Midfielders": data[data["Position"].str.contains("CMF") | (data["Position"].str.contains("AMF"))],
-    "Defensive Midfielders": data[data["Position"].str.contains("DMF")],
+    "Attacking Midfielders": data[data["Position"].str.contains("AMF")],
+    "Central Midfielders": data[data["Position"].str.contains("CMF") | (data["Position"].str.contains("DMF"))],
     "Outside Backs": data[(data["Position"].str.contains("LB")) | (data["Position"].str.contains("RB"))],
     "Center Backs": data[data["Position"].str.contains("CB")],
 }
@@ -99,6 +99,20 @@ def plot_radar(players, position, position_df, season=2024):
 
     data = data.drop(columns=["year"])
 
+    if position == "Goalkeepers":
+        data["gk_stat_shutout"] = (
+            data["gk_stat_conceded_goals"] == 0
+        ).astype(int)
+
+        shutout_pct = (
+            data.groupby(["team", "player_name"])
+            ["gk_stat_shutout"]
+            .mean()
+            .reset_index()
+        )
+        shutout_pct.rename(columns={"gk_stat_shutout": "gk_stat_shutout_pct"}, inplace=True)
+
+        data = data.merge(shutout_pct, on=["team", "player_name"], how="left")
     fig = go.Figure()
 
     if selected_metric == "Average (per game)":
@@ -175,11 +189,7 @@ def plot_radar(players, position, position_df, season=2024):
                         fill='toself',
                         name=player
                     ))
-
-    if selected_metric == "Percentile":
-        visible = True
-    else:
-        visible = False
+        data
 
     fig.update_layout(
     polar=dict(
@@ -208,7 +218,7 @@ for col, position in zip([col1, col2], ["Forwards", "Wingers"]):
         st.plotly_chart(fig, use_container_width=True)
 
 col3, col4 = st.columns(2)
-for col, position in zip([col3, col4], ["Defensive Midfielders", "Central Midfielders"]):
+for col, position in zip([col3, col4], ["Attacking Midfielders", "Central Midfielders"]):
     with col:
         st.header(position)
         options = ["Average"] + list(postional_subsets[position]["player_name"].unique())

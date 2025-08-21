@@ -17,10 +17,10 @@ def main():
 
     for file in os.listdir("zips"):
         zip_path = os.path.join("zips", file)
-        print(zip_path)
 
         if zip_path.endswith(".xlsx"):
-            player_name = file_name.split("stats")[-1].split(".xlsx")[0].strip()
+            print(zip_path)
+            player_name = zip_path.split("stats")[-1].split(".xlsx")[0].strip()
             player_name = re.sub(r"\s\(\d\)", "", player_name).strip()
             df = pd.read_excel(zip_path)
 
@@ -29,6 +29,8 @@ def main():
             df["away_team"] = df["Match"].str.split(" - ").apply(lambda x: re.split(r'\d', x[-1], maxsplit=1)[0].strip()).str.replace("(P)", "").str.strip()
             df["Date"] = pd.to_datetime(df["Date"], yearfirst=True)
             df['year'] = df.Date.dt.year
+            print(df["year"].unique())
+
 
             for year in df["year"].unique():
                 df_sub = df[(df["Competition"].str.contains("NCAA")) & (df["year"] == year)].copy()
@@ -38,6 +40,7 @@ def main():
                 df_sub["team"] = pd.concat([df_sub['home_team'], df_sub['away_team']]).mode()[0]
 
                 df_sub["player_name"] = player_name
+                print(player_name, year)
 
                 master = pd.concat([master, df_sub])
         elif zip_path.endswith(".zip"):
@@ -49,7 +52,6 @@ def main():
                     if not file_name.startswith('__MACOSX/') and file_name.endswith('.xlsx'):
                         player_name = file_name.split("stats")[-1].split(".xlsx")[0].strip()
                         player_name = re.sub(r"\s\(\d\)", "", player_name).strip()
-                        print(player_name)
 
                         with zip_ref.open(file_name) as file:
                             df = pd.read_excel(file)
